@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme tokens (RGB triplets so Tailwind opacity modifiers work) ---------- */
+:root {
+  color-scheme: light;
+  --page: 247 245 242;        --surface: 255 255 255;
+  --sunken: 244 241 237;      --sunken2: 236 232 227;     --track: 235 231 226;
+  --soft: 238 235 231;        --soft-hover: 231 226 220;  --tint: 247 243 239;
+  --ink: 26 26 26;            --muted: 107 102 95;        --faint: 112 106 99; 
+  --line: 230 226 220;        --field: 221 216 209;
+  --primary: 17 17 17;        --primary-hover: 43 43 43;  --onprimary: 255 255 255;
+  --chrome: 17 17 17;         --hero: 17 17 17;           --footer: 235 232 228;
+  --accent: 242 107 10;       --accent-text: 179 74 0;    --accent-light: 255 178 122;
+  --danger: 165 44 44;        --danger-text: 165 44 44;
+  --notice-ink: 74 63 54;     --err-bg: 255 240 237;      --err-ink: 141 45 34;
+}
+.dark {
+  color-scheme: dark;
+  --page: 18 17 16;           --surface: 28 26 24;
+  --sunken: 36 33 31;         --sunken2: 46 42 39;        --track: 58 53 50;
+  --soft: 42 38 35;           --soft-hover: 56 51 47;     --tint: 36 33 31;
+  --ink: 241 238 234;         --muted: 168 161 153;       --faint: 150 144 137;
+  --line: 53 49 45;           --field: 74 68 63;
+  --primary: 241 238 234;     --primary-hover: 255 255 255; --onprimary: 17 17 17;
+  --chrome: 11 10 9;          --hero: 31 28 26;           --footer: 14 13 12;
+  --accent: 242 107 10;       --accent-text: 255 154 77;  --accent-light: 255 178 122;
+  --danger: 165 44 44;        --danger-text: 255 138 127;
+  --notice-ink: 217 207 198;  --err-bg: 58 31 27;         --err-ink: 255 180 168;
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-page text-ink font-sans antialiased; font-size: 15px; line-height: 1.55; }
+  h1, h2, h3 { @apply font-serif; }
+  :focus-visible { @apply outline outline-2 outline-offset-2 outline-accent-text; }
+}
+
+@layer components {
+  .wrap { @apply mx-auto w-full max-w-[1180px] px-4 sm:px-6; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-onprimary transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-secondary { @apply border border-field bg-soft text-ink hover:bg-soft-hover; }
+  .btn-accent { @apply bg-accent text-[#1a1a1a] hover:bg-accent-light; }
+  .btn-danger { @apply bg-danger text-white hover:bg-[#8a2323]; }
+  .btn-sm { @apply px-3.5 py-1.5 text-xs; }
+  .card { @apply rounded-card border border-line bg-surface p-5 shadow-card; }
+  .eyebrow { @apply text-[11px] font-extrabold uppercase tracking-[.17em] text-accent-text; }
+  .label { @apply mb-1.5 mt-4 block text-[13px] font-semibold; }
+  .input { @apply w-full rounded-[10px] border border-field bg-surface px-3 py-2.5 text-ink placeholder:text-faint focus:border-accent focus:outline-none; }
+  /* Native <select> restyled to match text inputs: same height, border, radius, plus a custom chevron. */
+  select.input {
+    @apply cursor-pointer appearance-none pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%2364716a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 7.5l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 1rem;
+  }
+  .dark select.input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23a8a199' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 7.5l5 5 5-5'/%3E%3C/svg%3E");
+  }
+  select.input:disabled, .input:disabled { @apply cursor-not-allowed bg-sunken opacity-70; }
+  input.input[type='date'] { @apply min-h-[42px]; }
+  .pill { @apply inline-block rounded-full bg-soft px-2.5 py-1 text-[11px] font-extrabold text-ink; }
+  .notice { @apply rounded-xl bg-tint px-4 py-3 text-sm text-notice-ink; }
+  .notice-err { @apply bg-err-bg text-err-ink; }
+  .th { @apply bg-sunken px-3.5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted; }
+  .td { @apply border-t border-line px-3.5 py-3 text-[13px] align-top; }
+}

@@ -1,0 +1,48 @@
+{
+  "name": "fynwyn-drink-bank",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "db:dev": "tsx scripts/dev-db.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "staff:create": "tsx scripts/create-staff.ts",
+    "db:demo": "tsx scripts/demo-data.ts",
+    "sheet:sync": "tsx scripts/sheet-sync.ts",
+    "mail:dev": "mailpit"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "jose": "^5.10.0",
+    "next": "^14.2.35",
+    "nodemailer": "^10.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "autoprefixer": "^10.6.1",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "postcss": "^8.5.30",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.15",
+    "typescript": "5.7",
+    "vitest": "^4.1.11"
+  }
+}

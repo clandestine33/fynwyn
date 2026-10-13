@@ -1,0 +1,8 @@
+node_modules
+.next
+.env
+.env.local
+.dev-db
+*.tsbuildinfo
+next-env.d.ts
+coverage

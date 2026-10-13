@@ -1,0 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// All monetary amounts are stored as BigInt KOBO (₦1 = 100 kobo). Never floats.
+
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum StaffRole {
+  SUPER_ADMIN // everything, incl. staff management & settings
+  FINANCE // verify / reject / reverse payments, rewards
+  OPERATIONS // orders, inventory, products
+  SUPPORT // read-only customers, goals, orders
+}
+
+enum TokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum OccasionType {
+  WEDDING
+  BIRTHDAY
+  ANNIVERSARY
+  BURIAL
+  NAMING
+  GRADUATION
+  CORPORATE
+  HOLIDAY
+  OTHER
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED // target reached
+  CLOSED // fully redeemed / ended by customer
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAYSTACK
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REVERSED
+  FAILED
+}
+
+enum LedgerType {
+  CONTRIBUTION // +available
+  REVERSAL // -available (verified payment reversed)
+  ADJUSTMENT // +/- available (staff correction)
+  RESERVE // available -> reserved
+  RELEASE // reserved -> available
+  SPEND // reserved -> spent
+}
+
+enum OrderStatus {
+  PENDING_APPROVAL
+  APPROVED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum RewardStatus {
+  ELIGIBLE
+  FULFILLED
+  CANCELLED
+}
+
+enum StockMovementType {
+  RECEIPT
+  WRITE_OFF
+  RESERVE
+  RELEASE
+  DISPATCH
+}
+
+model Customer {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  name            String
+  phone           String?
+  passwordHash    String
+  status          CustomerStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+  preferredPackageId String?
+  failedLogins    Int            @default(0)
+  lockedUntil     DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  goals    Goal[]
+  payments Payment[]
+  orders   Order[]
+  tokens   AuthToken[]
+}
+
+model AuthToken {
+  id         String    @id @default(cuid())
+  customerId String
+  type       TokenType
+  tokenHash  String    @unique // sha256 of the emailed token; raw token is never stored
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, type])
+}
+
+model StaffUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         StaffRole
+  passwordHash String
+  active       Boolean   @default(true)
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  lastLoginAt  DateTime?
+  // Bumped on password change / deactivation to invalidate every existing staff session.
+  sessionVersion Int      @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id        String    @id @default(cuid())
+  staffId   String?
+  staffEmail String?
+  action    String
+  entity    String?
+  entityId  String?
+  meta      Json?
+  ip        String?
+  createdAt DateTime  @default(now())
+  staff     StaffUser? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+}
+
+model Package {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  tagline      String?
+  description  String?
+  targetAmount BigInt // kobo
+  featured     Boolean  @default(false)
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(10)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  benefits PackageBenefit[]
+  goals    Goal[]
+}
+
+// A perk unlocked once cumulative verified savings on a goal reach `milestoneAmount`.
+model PackageBenefit {
+  id              String   @id @default(cuid())
+  packageId       String
+  title           String
+  description     String?
+  milestoneAmount BigInt // kobo; 0 = included from the start
+  productId       String? // optional physical reward
+  quantity        Int      @default(1)
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(10)
+  updatedAt       DateTime @default(now()) @updatedAt
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  entitlements    RewardEntitlement[]
+
+  @@index([packageId])
+}
+
+// A customer's savings plan for a specific celebration.
+model Goal {
+  id           String       @id @default(cuid())
+  customerId   String
+  packageId    String
+  title        String
+  occasion     OccasionType
+  eventDate    DateTime
+  guestCount   Int?
+  notes        String?
+  targetAmount BigInt // snapshot of the package target at creation / last upgrade
+  status       GoalStatus   @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  package      Package             @relation(fields: [packageId], references: [id])
+  ledger       LedgerEntry[]
+  payments     Payment[]
+  orders       Order[]
+  entitlements RewardEntitlement[]
+
+  @@index([customerId])
+  @@index([eventDate])
+}
+
+// Append-only. Balances are always derived from this table.
+model LedgerEntry {
+  id        String     @id @default(cuid())
+  goalId    String
+  type      LedgerType
+  amount    BigInt // kobo, always positive except ADJUSTMENT which may be negative
+  paymentId String?
+  orderId   String?
+  note      String?
+  createdBy String? // staff id for manual entries
+  createdAt DateTime   @default(now())
+  goal      Goal       @relation(fields: [goalId], references: [id])
+
+  // Idempotency: a payment can be credited / reversed once; an order reserved/released/spent once.
+  @@unique([paymentId, type])
+  @@unique([orderId, type])
+  @@index([goalId, type])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  goalId       String
+  customerId   String
+  method       PaymentMethod
+  amount       BigInt // kobo
+  reference    String        @unique // our reference (Paystack) or the customer's bank ref (transfer)
+  status       PaymentStatus @default(PENDING)
+  proofUrl     String?
+  gatewayData  Json?
+  rejectReason String?
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  goal     Goal     @relation(fields: [goalId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([goalId])
+  @@index([status])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String?  @unique
+  name        String
+  category    String   @default("Beverage")
+  description String?
+  imageUrl    String?
+  imagePublicId String? // Cloudinary public id, so a replaced/removed image can be deleted
+  unitPrice   BigInt // kobo
+  unitCost    BigInt   @default(0)
+  onHand      Int      @default(0)
+  reserved    Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  movements StockMovement[]
+  orderItems OrderItem[]
+  benefits  PackageBenefit[]
+}
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  productId String
+  type      StockMovementType
+  quantity  Int // signed change to onHand (RECEIPT +, WRITE_OFF -, DISPATCH -); RESERVE/RELEASE change `reserved`
+  reference String?
+  note      String?
+  createdBy String?
+  createdAt DateTime          @default(now())
+  product   Product           @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  number        String      @unique // human friendly, e.g. FDB-240612-0007
+  goalId        String
+  customerId    String
+  status        OrderStatus @default(PENDING_APPROVAL)
+  total         BigInt // kobo
+  deliveryDate  DateTime?
+  deliveryAddress String
+  deliveryPhone String
+  deliveryNote  String?
+  cancelReason  String?
+  approvedBy    String?
+  approvedAt    DateTime?
+  deliveredAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  goal     Goal        @relation(fields: [goalId], references: [id])
+  customer Customer    @relation(fields: [customerId], references: [id])
+  items    OrderItem[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  name      String // snapshot
+  unitPrice BigInt // snapshot, kobo
+  quantity  Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+}
+
+model RewardEntitlement {
+  id        String       @id @default(cuid())
+  goalId    String
+  benefitId String
+  titleSnapshot String
+  quantity  Int          @default(1)
+  status    RewardStatus @default(ELIGIBLE)
+  fulfilledBy String?
+  fulfilledAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @default(now()) @updatedAt
+  goal      Goal           @relation(fields: [goalId], references: [id])
+  benefit   PackageBenefit @relation(fields: [benefitId], references: [id])
+
+  @@unique([goalId, benefitId])
+}
+
+// Singleton row (id = 1) holding campaign-wide settings.
+model Setting {
+  id                 Int       @id @default(1)
+  campaignName       String    @default("FYNWYN Drink Bank")
+  brandMessage       String    @default("Save toward the celebration you have in mind. Verified contributions become drink credit.")
+  registrationOpen   Boolean   @default(true)
+  redemptionOpen     Boolean   @default(true)
+  finalRedemptionDeadline DateTime?
+  termsVersion       String    @default("1.0")
+  termsText          String    @default("Contributions are verified by FYNWYN before they become drink credit. ₦1 verified = ₦1 drink credit. Drink credit is redeemable only for catalogue items, is not convertible to cash, and must be used by the final redemption deadline.")
+  privacyText        String    @default("We collect only the information needed to run your account, verify payments and deliver orders. We do not sell your data.")
+  supportEmail       String?
+  supportPhone       String?
+  updatedAt          DateTime  @updatedAt
+}
+
+// ---- Google Sheet mirror bookkeeping (see src/server/sheet-sync.ts) ----
+
+// One row per mirrored entity: the human-readable ID used in the sheet (e.g. FDB-00003) and a hash of what we last wrote.
+model SheetRow {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  code       String
+  hash       String?
+  syncedAt   DateTime @default(now())
+
+  @@unique([entityType, entityId])
+  @@unique([entityType, code])
+}
+
+// Next number per ID prefix (FDB, PAY, ORD, ...). Seeded from the highest ID already present in the sheet.
+model SheetCounter {
+  prefix String @id
+  last   Int    @default(0)
+}
