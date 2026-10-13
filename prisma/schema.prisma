@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // migrations; same as DATABASE_URL locally, Supabase session pooler (:5432) in prod
 }
 
 // All monetary amounts are stored as BigInt KOBO (₦1 = 100 kobo). Never floats.

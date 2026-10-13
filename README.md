@@ -88,6 +88,7 @@ Set `PAYSTACK_SECRET_KEY`; register webhook `{APP_URL}/api/webhooks/paystack`. C
 
 ## Production checklist
 - Strong, distinct `CUSTOMER_SESSION_SECRET` / `STAFF_SESSION_SECRET`; HTTPS only (cookies are `__Host-` + Secure in production).
+- Database on Supabase: `DATABASE_URL` = transaction pooler (port 6543) with `?pgbouncer=true&connection_limit=1`, `DIRECT_URL` = session pooler (port 5432). Turn off Project Settings → Data API so the tables aren't exposed over Supabase's REST API.
 - `npm run db:deploy` for migrations; create the first staff with `staff:create` (don't ship the dev seed password).
 - The rate limiter is in-memory; move it to Redis if you run several instances.
 - Customer password reset / email verification need real email: set `RESEND_API_KEY` and an `EMAIL_FROM` on a domain verified in Resend (add its DNS records under Resend > Domains).
